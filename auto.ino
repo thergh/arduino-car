@@ -9,7 +9,6 @@
 Wheels w;
 volatile char cmd;
 
-
 // obsługa pilota
 // kody pilota:
 // 1: 69  2: 70  3: 71   4: 68   5: 64   6: 67   7: 7  8: 21   9: 9  0: 22   *: 25   #: 13   up: 24  left: 8   right: 90   down: 82  ok: 28 
@@ -17,7 +16,6 @@ constexpr uint8_t RECV_PIN{2};
 enum State{OFF, ON} state;
 
 const uint16_t s1 = 0x3F;  // Taste 5
-
 
 void setup(){
     w.attach(12, 4, 3, 8, 7, 5);
@@ -27,9 +25,6 @@ void setup(){
     pinMode(7, OUTPUT);  // PP
     pinMode(8, OUTPUT);  // PT    
     pinMode(5, OUTPUT);  // P power
-
-
-  
 
     // set speed
     analogWrite(3, 255);
@@ -49,8 +44,6 @@ void setup(){
     // // Timer1.attachInterrupt(blinkInterrupt);
     // // Timer1.attachInterrupt(printInterrupt);
     // // Timer1.attachInterrupt(signalInterrupt);
-
-    // setup
 
     // setup radio receiver
     IrReceiver.begin(RECV_PIN);
@@ -116,31 +109,17 @@ void loop(){
     }
 }
 
-
-// void signalInterrupt(void){
-//     uint16_t signal = irReceive();
-//     perform_action(signal);
-//     Serial.print(signal);
+// void blinkInterrupt(void){
 //     digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
+//     // Serial.print("Interrupted\n");
 // }
-
-
-void blinkInterrupt(void){
-    digitalWrite(LED_BUILTIN, !digitalRead(LED_BUILTIN));
-    // Serial.print("Interrupted\n");
-}
-
-
-void printInterrupt(void){
-    Serial.print("interrupt\n");
-}
 
 
 // Receives signal and prints it to console
 uint16_t irReceive(){
     uint16_t received{0};
   
-    if (IrReceiver.decode()){
+    if(IrReceiver.decode()){
         IrReceiver.printIRResultShort(&Serial);
         if(IrReceiver.decodedIRData.protocol == UNKNOWN){
             // We have an unknown protocol here, print more info
@@ -161,38 +140,4 @@ uint16_t irReceive(){
     return received;
 }
 
-
-// Waits until user provides correct signal
-int enter_password(){
-    Serial.print("Waiting for a password\n");
-    int password = 111;
-    int entered = 000;
-    int signal = 0;
-    while(entered != 69){
-        entered = 000;
-        delay(100);
-        signal = irReceive();
-        entered = signal;
-    }
-    Serial.println("Entered a proper password");
-}
-
-
-// Performs action depending on signal
-void perform_action(uint16_t signal){
-    switch(signal){   
-        case 24:
-            w.goForward(5);
-            Serial.print("Signal: ");
-            Serial.print(signal);
-            Serial.print(", going forward\n");
-            break;
-        case 82:
-            w.goBack(5);
-            Serial.print("Signal: ");
-            Serial.print(signal);
-            Serial.print(", going forward\n");
-            break;
-  }
-}
 

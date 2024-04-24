@@ -1,25 +1,8 @@
-/* 
- * prosta implementacja klasy obsługującej 
- * silniki pojazdu za pośrednictwem modułu L298
- *
- * Sterowanie odbywa się przez:
- * 1)  powiązanie odpowiednich pinów I/O Arduino metodą attach() 
- * 2)  ustalenie prędkości setSpeed*()
- * 3)  wywołanie funkcji ruchu
- *
- * TODO:
- *  - zabezpieczenie przed ruchem bez attach()
- *  - ustawienie domyślnej prędkości != 0
- */
-
-
 #include <Arduino.h>
 
 
 #ifndef Wheels_h
 #define Wheels_h
-
-#define BEEPER 13
 
 class Wheels {
     public: 
@@ -61,7 +44,6 @@ class Wheels {
         int pinsRight[3];
         int pinsLeft[3];
 };
-
 
 
 #endif
