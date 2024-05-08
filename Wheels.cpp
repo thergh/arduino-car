@@ -104,7 +104,7 @@ void Wheels::stop(){
 }
 
 
-byte LCDAddress = 0x3F;
+byte LCDAddress = 0x27;
 
 void Wheels::goForward(int cm){
     LiquidCrystal_I2C lcd(LCDAddress, 16, 2);
