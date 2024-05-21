@@ -16,9 +16,14 @@
 // "-" - ground
 // ostatni - +
 
+// podłączanie sonaru
+// czerwony     zasil
+// brązowy      masa
+// żółty        signal
+
 // piny dla sonaru (HC-SR04)
-#define TRIG A4
-#define ECHO A5
+#define TRIG A4     // do zmiany na 2
+#define ECHO A5     // do zmiany na 3
 
 // pin kontroli serwo (musi być PWM)
 #define SERVO 11
@@ -56,38 +61,14 @@ void setup(){
     Serial.begin(9600);
     serwo.attach(SERVO);
 
-    Serial.println("Forward: WAD");
-    Serial.println("Back: ZXC");
-    Serial.println("Stop: S");
-
-    Serial.print("Initiated pins.");
+    // Serial.print("Initiated pins.");
 
     // w.goForward(5);
-    // setup timer1
-    // pinMode(LED_BUILTIN, OUTPUT);
-    // Timer1.initialize(1); // Fire An Interrupt Every 10ms
-    // // Timer1.attachInterrupt(blinkInterrupt);
-    // // Timer1.attachInterrupt(printInterrupt);
-    // // Timer1.attachInterrupt(signalInterrupt);
 
     // setup radio receiver
     IrReceiver.begin(RECV_PIN);
-    Serial.print(F("Ready to receive IR signals at pin "));
-    Serial.println(RECV_PIN);
-    // enter_password();
-
-    // lookAndTellDistance(0);
-    // delay(500);
-    // lookAndTellDistance(180);
-    // delay(500);
-    // serwo.write(90);
-
-    check_obstacle_left();
-    check_obstacle_right();
-    // for(byte angle = 0; angle < 180; angle+= 20) {
-    //     lookAndTellDistance(angle);
-    //     delay(500);
-    // }
+    // Serial.print(F("Ready to receive IR signals at pin "));
+    // Serial.println(RECV_PIN);
 }
 
 int time_current = 0;
@@ -95,29 +76,39 @@ int time_prev_signal = 0;
 int time_diff = 0;
 int signal = 0;
 int max_idle_time = 200;
+int is_auto = 0;
+
 
 void loop(){
     time_current = millis();
     time_diff = time_current - time_prev_signal;
     signal = irReceive();
-    // perform_action(signal);
 
-    // check if signal is non-zero
-    if(signal != 0){
-        time_prev_signal = millis();
-    }
-    // if there is a time without receiving a signal, stop
-    if(time_diff > max_idle_time){
-        w.stop();
-    }
-    else{
+    if(is_auto == 0){
+            // check if signal is non-zero
+        if(signal != 0){
+            time_prev_signal = millis();
+        }
+
+        // if there is a time without receiving a signal, stop
+        if(time_diff > max_idle_time){
+            w.stop();
+        }
+
         switch(signal){
             case 24:
                 if(time_diff < max_idle_time){
-                    w.forward();
-                    Serial.print("Signal: ");
-                    Serial.print(signal);
-                    Serial.print(", going forward\n");
+                    // if there is no obstacle in front
+                    if(!check_obstacle_front()){
+                        w.forward();
+                        Serial.print("Signal: ");
+                        Serial.print(signal);
+                        Serial.print(", going forward\n");
+                    }
+                    else{
+                        w.stop();
+                    }
+                    
                 }
                 break;
             case 82:
@@ -143,30 +134,76 @@ void loop(){
                     Serial.print(signal);
                     Serial.print(", going right\n");  
                 }
-                break;                  
+                break;
+            case 69:
+                is_auto = 1;
+                Serial.println("changing state to autonomous");
+                break;          
+        }   // end switch
+    }   // end state 0
+    else{
+        // go back to manual if we receive signal "ok"
+        if(signal == 70){
+            Serial.println("changing state to manual");
+            w.stop();
+            is_auto = 0;
         }
 
-    }
+        int auto_state = 0;
 
-    
-    // handling serial input
-    if(Serial.available()){
-        cmd = Serial.read();
-        switch(cmd){
-            case 'w': w.forward(); break;
-            case 'x': w.back(); break;
-            case 'a': w.forwardLeft(); break;
-            case 'd': w.forwardRight(); break;
-            case 'z': w.backLeft(); break;
-            case 'c': w.backRight(); break;
-            case 's': w.stop(); break;
-            case '1': w.setSpeedLeft(75); break;
-            case '2': w.setSpeedLeft(200); break;
-            case '9': w.setSpeedRight(75); break;
-            case '0': w.setSpeedRight(200); break;
-            case '5': w.setSpeed(100); break;
-            case 'f': w.goForward(5); break;
-            case 'b': w.goBack(5); break;
+        // LOGIC:
+        // 1. Try moving forward
+        // 2. Move forward as far as you can
+        // 3. Check possible right and left paths and pick a turn
+        // 4. Goto 1
+
+        // STATES:
+        // 0    standing
+        // 1    moving forward
+        // 2    looking
+        // 3    moving front right
+        // 4    moving front left
+        switch(auto_state){
+            case 0: // preparing to go forward
+                // if there's no obstacle, go to state 1
+                if(!check_obstacle_front()){
+                    w.forward();
+                    auto_state = 1;
+                }
+                else{
+                    w.stop();
+                    auto_state = 2;
+                }
+                break;
+            case 1: // going forward
+                if(check_obstacle_front()){
+                    w.stop();
+                    auto_state = 2;
+                }
+                break;
+            case 2: // handling wall infront
+                w.goBack(20);
+                int left_distance = 0;
+                int right_distance = 0;
+                left_distance = get_distance_left();
+                right_distance = get_distance_right();
+                if(left_distance < 30 && right_distance < 30){
+                    // w.goBack(20);
+                    w.stop();
+                    break;
+                }
+                if(left_distance > right_distance){
+                    w.forwardRight();
+                    delay(125);
+                    w.stop();
+                }
+                else{
+                    w.forwardLeft();
+                    delay(125);
+                    w.stop();
+                }
+                auto_state = 0;
+                break;
         }
     }
 }
@@ -177,10 +214,10 @@ uint16_t irReceive(){
     uint16_t received{0};
   
     if(IrReceiver.decode()){
-        IrReceiver.printIRResultShort(&Serial);
+        // IrReceiver.printIRResultShort(&Serial);
         if(IrReceiver.decodedIRData.protocol == UNKNOWN){
             // We have an unknown protocol here, print more info
-            IrReceiver.printIRResultRawFormatted(&Serial, true);
+            // IrReceiver.printIRResultRawFormatted(&Serial, true);
         }
         if(IrReceiver.decodedIRData.protocol == NEC){
             received = IrReceiver.decodedIRData.command;
@@ -199,37 +236,48 @@ uint16_t irReceive(){
 
 
 int lookAndTellDistance(byte angle) {
-  
-  unsigned long tot;      // czas powrotu (time-of-travel)
-  unsigned int distance;
+    unsigned long tot;      // czas powrotu (time-of-travel)
+    unsigned int distance;
 
-  Serial.print("Patrzę w kącie ");
-  Serial.print(angle);
-  serwo.write(angle);
-  
-/* uruchamia sonar (puls 10 ms na `TRIGGER')
- * oczekuje na powrotny sygnał i aktualizuje
- */
-  digitalWrite(TRIG, HIGH);
-  delay(10);
-  digitalWrite(TRIG, LOW);
-  tot = pulseIn(ECHO, HIGH);
+    Serial.print("Patrzę w kącie ");
+    Serial.print(angle);
+    serwo.write(angle);
+    
+    /* uruchamia sonar (puls 10 ms na `TRIGGER')
+    * oczekuje na powrotny sygnał i aktualizuje
+    */
+    digitalWrite(TRIG, HIGH);
+    delay(10);
+    digitalWrite(TRIG, LOW);
+    tot = pulseIn(ECHO, HIGH);
 
-/* prędkość dźwięku = 340m/s => 1 cm w 29 mikrosekund
- * droga tam i z powrotem, zatem:
- */
-  distance = tot/58;
+    /* prędkość dźwięku = 340m/s => 1 cm w 29 mikrosekund
+    * droga tam i z powrotem, zatem:
+    */
+    distance = tot/58;
 
-  Serial.print(": widzę coś w odległości ");
-  Serial.println(distance);
-  return distance;
+    Serial.print(": widzę coś w odległości ");
+    Serial.println(distance);
+    return distance;
+}
+
+
+int check_obstacle_front(){
+    int distance = lookAndTellDistance(90);
+    // delay(500);
+    if(distance <= 30){
+        return 1;
+    }
+    else{
+        return 0;
+    }
 }
 
 
 int check_obstacle_left(){
     int distance = lookAndTellDistance(180);
     delay(500);
-    if(distance <= 2000){
+    if(distance <= 30){
         return 1;
     }
     else{
@@ -243,10 +291,30 @@ int check_obstacle_right(){
     delay(500);
     serwo.write(90);
     delay(500);
-    if(distance <= 2000){
+    if(distance <= 30){
         return 1;
     }
     else{
         return 0;
     }
+}
+
+
+// CHECK
+int get_distance_left(){
+    int distance = lookAndTellDistance(45);
+    delay(500);
+    serwo.write(90);
+    delay(500);
+    return distance;
+}
+
+
+// CHECK
+int get_distance_right(){
+    int distance = lookAndTellDistance(135);
+    delay(500);
+    serwo.write(90);
+    delay(500);
+    return distance;
 }
